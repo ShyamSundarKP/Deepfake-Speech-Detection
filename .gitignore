@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.env
+.venv
+venv/
+ENV/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Data
+data/
+*.wav
+*.flac
+*.mp3
+*.npy
+
+#old
+old/
+
+# Models (VERY IMPORTANT)
+models/**/*.pth
+models/**/*.pt
+models/**/*.bin
+
+# Logs & outputs
+logs/
+*.log
+
+# Jupyter
+.ipynb_checkpoints/
+
+# VSCode
+.vscode/
+
+# Cache
+cache/
