@@ -16,6 +16,7 @@ USAGE (standalone):
 import os
 import sys
 import json
+from unittest import result
 import numpy as np
 from pathlib import Path
 
@@ -312,24 +313,49 @@ def predict_single_file(
     }
 
     # Apply chosen strategy
+
+    # Load calibrated threshold from saved fusion results
+    saved_threshold = None
+    if fusion_results_path.exists():
+        if 'best_strategy_results' in saved:
+            saved_threshold = saved['best_strategy_results'].get('calibrated_threshold')
+
     if strategy == 'class_precision':
-        # Can't compute class precision for a single sample; fall back to calibrated
         strategy = 'calibrated'
 
     if strategy == 'calibrated':
-        cal_thresh = threshold if threshold is not None else 0.5
-        result = calibrated_threshold_fusion(single_results, threshold=cal_thresh, sample_idx=0)
-    elif strategy == 'disagreement':
-        result = disagreement_dampened_fusion(single_results, threshold=threshold or 0.5, sample_idx=0)
-    else:
-        result = calibrated_threshold_fusion(single_results, threshold=threshold or 0.5, sample_idx=0)
+        # Use saved calibrated threshold if available
+        cal_thresh = threshold if threshold is not None else saved_threshold
+        if cal_thresh is None:
+            cal_thresh = 0.5  # fallback only if absolutely nothing available
 
-    result['per_model_probabilities'] = probs
-    result['strategy_used'] = strategy
+        result = calibrated_threshold_fusion(
+            single_results,
+            threshold=cal_thresh,
+            sample_idx=0
+        )
+
+    elif strategy == 'disagreement':
+        result = disagreement_dampened_fusion(
+            single_results,
+            threshold=threshold or 0.5,
+            sample_idx=0
+        )
+
+    else:
+        result = calibrated_threshold_fusion(
+            single_results,
+            threshold=saved_threshold or 0.5,
+            sample_idx=0
+        )
+
 
     # ------------------------------------------------------------------ #
     # Print final output
     # ------------------------------------------------------------------ #
+    result['per_model_probabilities'] = probs
+    result['strategy_used'] = strategy
+
     print("\n" + "=" * 50)
     print(f"  FINAL DECISION: {result['decision_string']}")
     print(f"  Fused score:    {result['final_score']:.4f}")
