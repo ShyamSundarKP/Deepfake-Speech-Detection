@@ -19,6 +19,36 @@ import json
 from unittest import result
 import numpy as np
 from pathlib import Path
+import requests
+
+# ------------------------------
+# HuggingFace Model URLs
+# ------------------------------
+HF_URLS = {
+    "wav2vec": "https://huggingface.co/Shyazam7/deepfake-speech-detection-models/resolve/main/wav2vec_best_model.pth",
+    "mel_cnn": "https://huggingface.co/Shyazam7/deepfake-speech-detection-models/resolve/main/mel_cnn_best_model.pth",
+    "mfcc": "https://huggingface.co/Shyazam7/deepfake-speech-detection-models/resolve/main/mfcc_best_model.pth",
+}
+
+def download_if_missing(url: str, save_path: Path):
+    """
+    Download model from HuggingFace if it does not exist.
+    Uses streaming to support large files.
+    """
+    if save_path.exists():
+        return
+
+    print(f"\n⬇ Downloading model from HuggingFace...")
+    save_path.parent.mkdir(parents=True, exist_ok=True)
+
+    with requests.get(url, stream=True) as r:
+        r.raise_for_status()
+        with open(save_path, "wb") as f:
+            for chunk in r.iter_content(chunk_size=8192):
+                if chunk:
+                    f.write(chunk)
+
+    print("✅ Download complete.")
 
 # Add scripts to path so fusion_strategies can be imported
 sys.path.append(str(Path(__file__).parent))
@@ -237,6 +267,9 @@ def predict_single_file(
 
     # Wav2Vec2
     wav2vec_path = base_dir / 'models' / 'wav2vec' / 'best_model.pth'
+
+    download_if_missing(HF_URLS["wav2vec"], wav2vec_path)
+
     if wav2vec_path.exists():
         model = Wav2VecClassifier().to(device)
         model.load_state_dict(torch.load(wav2vec_path, map_location=device))
@@ -244,11 +277,12 @@ def predict_single_file(
         with torch.no_grad():
             logits = model(wav_input.unsqueeze(0))
             probs['wav2vec'] = float(torch.softmax(logits, dim=1)[0, 1].cpu())
-    else:
-        print("  ⚠ Wav2Vec2 model not found, skipping.")
 
     # Mel CNN
     mel_path = base_dir / 'models' / 'mel_cnn' / 'best_model.pth'
+
+    download_if_missing(HF_URLS["mel_cnn"], mel_path)
+
     if mel_path.exists():
         model = MelCNN().to(device)
         model.load_state_dict(torch.load(mel_path, map_location=device))
@@ -256,11 +290,12 @@ def predict_single_file(
         with torch.no_grad():
             logits = model(mel_input)
             probs['mel_cnn'] = float(torch.softmax(logits, dim=1)[0, 1].cpu())
-    else:
-        print("  ⚠ Mel CNN model not found, skipping.")
 
     # MFCC BiLSTM
     mfcc_path = base_dir / 'models' / 'mfcc' / 'best_model.pth'
+
+    download_if_missing(HF_URLS["mfcc"], mfcc_path)
+
     if mfcc_path.exists():
         model = MFCCBiLSTM().to(device)
         model.load_state_dict(torch.load(mfcc_path, map_location=device))
@@ -268,11 +303,6 @@ def predict_single_file(
         with torch.no_grad():
             logits = model(mfcc_input)
             probs['mfcc'] = float(torch.softmax(logits, dim=1)[0, 1].cpu())
-    else:
-        print("  ⚠ MFCC model not found, skipping.")
-
-    print(f"  Per-model P(fake): " +
-          ", ".join(f"{k}: {v:.4f}" for k, v in probs.items()))
 
     # ------------------------------------------------------------------ #
     # Fusion using pre-computed validation accuracies
